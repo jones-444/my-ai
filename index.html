@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My AI</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#111111">
+<link rel="icon" href="icon-192.png">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee;
+         display: flex; flex-direction: column; height: 100dvh; }
+  #status { padding: 10px 14px; background: #222; font-size: 13px; }
+  #chat { flex: 1; overflow-y: auto; padding: 12px; }
+  .msg { max-width: 85%; padding: 10px 14px; margin: 8px 0; border-radius: 16px;
+         white-space: pre-wrap; line-height: 1.4; }
+  .user { background: #3b82f6; margin-left: auto; }
+  .ai { background: #2a2a2a; }
+  #bar { display: flex; gap: 8px; padding: 10px; background: #1a1a1a; }
+  #input { flex: 1; padding: 12px; border-radius: 20px; border: none;
+           background: #2a2a2a; color: #eee; font-size: 16px; }
+  button { padding: 0 18px; border: none; border-radius: 20px; background: #3b82f6;
+           color: #fff; font-size: 16px; }
+  button:disabled { opacity: .4; }
+</style>
+</head>
+<body>
+<div id="status">Starting…</div>
+<div id="chat"></div>
+<div id="bar">
+  <input id="input" placeholder="Message my AI" autocomplete="off" disabled>
+  <button id="send" disabled>Send</button>
+</div>
+
+<script>
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script>
+<script type="module">
+import { CreateMLCEngine } from "https://esm.run/@mlc-ai/web-llm";
+
+// Change these to customize your AI
+const MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; // small + fast. Try "Llama-3.2-1B-Instruct-q4f16_1-MLC" for smarter
+const SYSTEM_PROMPT = "You are Nova, a friendly, concise personal AI that lives on the user's phone.";
+
+const statusEl = document.getElementById("status");
+const chatEl = document.getElementById("chat");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const history = [{ role: "system", content: SYSTEM_PROMPT }];
+
+function addMsg(text, cls) {
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  d.textContent = text;
+  chatEl.appendChild(d);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return d;
+}
+
+if (!navigator.gpu) {
+  statusEl.textContent = "This browser has no WebGPU. Try Chrome on a recent Android phone, or Safari on a recent iPhone (iOS 18+).";
+} else {
+  try {
+    const engine = await CreateMLCEngine(MODEL, {
+      initProgressCallback: (p) => { statusEl.textContent = p.text; }
+    });
+    statusEl.textContent = "Ready. Running fully on your phone.";
+    input.disabled = sendBtn.disabled = false;
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      input.disabled = sendBtn.disabled = true;
+      addMsg(text, "user");
+      history.push({ role: "user", content: text });
+      const bubble = addMsg("…", "ai");
+      let reply = "";
+      const stream = await engine.chat.completions.create({ messages: history, stream: true });
+      for await (const chunk of stream) {
+        reply += chunk.choices[0]?.delta?.content || "";
+        bubble.textContent = reply;
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+      history.push({ role: "assistant", content: reply });
+      input.disabled = sendBtn.disabled = false;
+      input.focus();
+    }
+    sendBtn.onclick = send;
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+  } catch (err) {
+    statusEl.textContent = "Error: " + err.message;
+  }
+}
+</script>
+</body>
+</html>
