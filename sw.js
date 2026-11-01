@@ -1,4 +1,4 @@
-const CACHE = "my-ai-v2";
+const CACHE = "my-ai-v4";
 const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png"];
 const CACHE_HOSTS = ["esm.run", "cdn.jsdelivr.net"];
 
